@@ -1,0 +1,32 @@
+metricbeat.config:
+  modules:
+    path: ${path.config}/modules.d/*.yml
+    # Reload module configs as they change:
+    reload.enabled: false
+
+metricbeat.modules:
+  - module: vsphere
+    metricsets:
+      - datastore
+      - host
+      - virtualmachine
+    enabled: true
+    period: 5s
+    hosts: ["${VSPHERE_URL}"]
+    username: "${VSPHERE_USER}"
+    password: "${VSPHERE_PASS}"
+    insecure: false
+
+output.elasticsearch:
+  hosts: 'elasticsearch:9200'
+  username: ''
+  password: ''
+
+logging.level: info
+
+setup.dashboards.enabled: true
+
+setup.kibana:
+  host: "kibana:5601"
+  username: ""
+  password: ""

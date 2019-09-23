@@ -1,0 +1,88 @@
+version: "2.1"
+services:
+  vsphere:
+    image: nimmis/vcsim
+    container_name: vsphere
+    ports:
+      - "127.0.0.1:8989:443"
+    healthcheck:
+      test: ["CMD", "curl", "--write-out", "'HTTP %{http_code}'", "--silent", "--output", "/dev/null", "http://vsphere:443/"]
+      retries: 10
+      interval: 10s
+
+  beat-local:
+    build:
+      context: .
+      args:
+        METRICBEAT_FILE: metricbeat-local.yml
+    container_name: beat-local
+    depends_on:
+      kibana:
+        condition: service_healthy
+      vsphere:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      args:
+        METRICBEAT_FILE: metricbeat.yml
+    environment:
+      - VSPHERE_USER=${VSPHERE_USER}
+      - VSPHERE_PASS=${VSPHERE_PASS}
+      - VSPHERE_URL=${VSPHERE_URL}
+    container_name: beat
+    depends_on:
+      kibana:
+        condition: service_healthy
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:6.3.0
+    environment:
+      - cluster.name=docker-cluster
+      - xpack.security.enabled=false
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "path.data=/usr/share/elasticsearch/data/6.3.0"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    mem_limit: 5g
+    logging:
+      driver: 'json-file'
+      options:
+          max-size: '2m'
+          max-file: '5'
+    ports:
+      - "127.0.0.1:9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
+      retries: 10
+      interval: 20s
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:6.3.0
+    environment:
+      SERVER_NAME: kibana.example.org
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+    ports:
+      - "127.0.0.1:5601:5601"
+    logging:
+      driver: 'json-file'
+      options:
+          max-size: '2m'
+          max-file: '5'
+    healthcheck:
+      test: ["CMD", "curl", "--write-out", "'HTTP %{http_code}'", "--silent", "--output", "/dev/null", "http://kibana:5601/"]
+      retries: 10
+      interval: 10s
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  esdata:
+    driver: local
